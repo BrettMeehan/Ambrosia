@@ -231,15 +231,12 @@ class RestaurantEditViewController: UIViewController, UITextFieldDelegate, CLLoc
             let selectedCategories = categoryTable.indexPathsForSelectedRows!
             
             let selectedRatingRow = reviewOptionsTable.indexPathForSelectedRow!
-            
-            self.restaurant = Restaurant(name: placeName!, ID: placeID!, latitude: placeLatitude!, longitude: placeLongitude!, categories: selectedCategories, lastVisit: lastVisit, numVisits: numVisits, notes: notes, rating: selectedRatingRow)
-            if let rest = self.restaurant{
+            if let rest = Restaurant(name: placeName!, ID: placeID!, latitude: placeLatitude!, longitude: placeLongitude!, categories: selectedCategories, lastVisit: lastVisit, numVisits: numVisits, notes: notes, rating: selectedRatingRow){
                 if let savedRestaurants = loadRestaurants(){
                     restaurantDict = savedRestaurants
                 }
                 
                 restaurantDict[placeID!] = rest
-                print("this: " + rest.notes)
                 saveRestaurants()
             }
             print("Saving to storage: ")

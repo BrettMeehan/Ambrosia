@@ -14,10 +14,11 @@ class SearchResultsTableViewController: UITableViewController, CLLocationManager
     struct SearchResultEntry{
         var name: String
         var placeID: String
+        var lastVisit: NSDate?
     }
     
     // MARK: Properties
-    let METERS_PER_MILE = 1609.344
+    static let METERS_PER_MILE = 1609.344
     
     
     var searchName: String?
@@ -33,6 +34,7 @@ class SearchResultsTableViewController: UITableViewController, CLLocationManager
     
     let locationManager = CLLocationManager()
     var updatedLocation = false
+    var noResults = false
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -75,6 +77,9 @@ class SearchResultsTableViewController: UITableViewController, CLLocationManager
 
         // Configure the cell...
         cell.restaurantNameLabel.text = searchResults[indexPath.row].name
+        if noResults {
+            cell.selectionStyle = UITableViewCellSelectionStyle.None
+        }
 
         return cell
     }
@@ -83,7 +88,7 @@ class SearchResultsTableViewController: UITableViewController, CLLocationManager
     // Override to support conditional editing of the table view.
     override func tableView(tableView: UITableView, canEditRowAtIndexPath indexPath: NSIndexPath) -> Bool {
         // Return false if you do not want the specified item to be editable.
-        return true
+        return !noResults
     }
  
 
@@ -106,17 +111,31 @@ class SearchResultsTableViewController: UITableViewController, CLLocationManager
     }
 
     @IBAction func pickRestaurant(sender: UIButton) {
+        if noResults {
+            return
+        }
         if saveSearchResults == nil{
             saveSearchResults = searchResults
+            // If restaurants have dates, order older date first (Ascending order)
+            saveSearchResults?.sortInPlace({ s1, s2 in
+                if s1.lastVisit == nil {
+                    return true
+                } else if s2.lastVisit == nil {
+                    return false
+                } else if s1.lastVisit!.compare(s2.lastVisit!) == .OrderedSame || s1.lastVisit!.compare(s2.lastVisit!) == .OrderedAscending {
+                    return true
+                } else {
+                    return false
+                }})
         }
         searchResults.removeAll()
         
         if saveSearchResults!.count > 0{
             var foundMatch = false
             for _ in 0...saveSearchResults!.count{
-                print(saveSearchResults)
-                print(saveSearchResults?.indices)
-                print(pickerIndex % saveSearchResults!.count)
+                //print(saveSearchResults)
+                //print(saveSearchResults?.indices)
+                //print(pickerIndex % saveSearchResults!.count)
                 let rest = restaurantDict![saveSearchResults![pickerIndex % saveSearchResults!.count].placeID]
                 if rest!.rating.row != 1{ //not equal to "No"
                     searchResults.append(saveSearchResults![pickerIndex % saveSearchResults!.count])
@@ -157,12 +176,13 @@ class SearchResultsTableViewController: UITableViewController, CLLocationManager
             updatedLocation = true
             manager.stopUpdatingLocation()
         }
+        
         for restaurant in restaurantDict!.values{
             let currentCoordinates = manager.location?.coordinate
             if currentCoordinates == nil{
                 print("failed")
             }else{
-                let distance = GMSGeometryDistance(currentCoordinates!, CLLocationCoordinate2D(latitude: restaurant.latitude, longitude: restaurant.longitude))/METERS_PER_MILE
+                let distance = GMSGeometryDistance(currentCoordinates!, CLLocationCoordinate2D(latitude: restaurant.latitude, longitude: restaurant.longitude))/SearchResultsTableViewController.METERS_PER_MILE
                 print("\(distance)")
                 
                 var categoryIndexes = [Int]()
@@ -177,13 +197,16 @@ class SearchResultsTableViewController: UITableViewController, CLLocationManager
 
                 
                 if testName && testCategory && testDistance && testNewRestaurant{
-                    let entry = SearchResultEntry(name: restaurant.name, placeID: restaurant.googleMapsID)
+                    let entry = SearchResultEntry(name: restaurant.name, placeID: restaurant.googleMapsID, lastVisit: restaurant.lastVisit)
                     searchResults.append(entry)
                 }
-                
-                self.tableView.reloadData()
             }
         }
+        if searchResults.isEmpty {
+            searchResults.append(SearchResultEntry(name: "No results", placeID: "", lastVisit: nil))
+            noResults = true
+        }
+        self.tableView.reloadData()
     }
     
     func locationManager(manager: CLLocationManager, didFailWithError error: NSError){
@@ -192,6 +215,14 @@ class SearchResultsTableViewController: UITableViewController, CLLocationManager
 
     
     // MARK: - Navigation
+    
+    override func shouldPerformSegueWithIdentifier(identifier: String, sender: AnyObject?) -> Bool {
+        if identifier == "ShowDetail" && noResults {
+            return false
+        } else {
+            return true
+        }
+    }
 
     // In a storyboard-based application, you will often want to do a little preparation before navigation
     override func prepareForSegue(segue: UIStoryboardSegue, sender: AnyObject?) {
@@ -207,9 +238,7 @@ class SearchResultsTableViewController: UITableViewController, CLLocationManager
             if let selectedSearchResultCell = sender as? SearchResultsTableViewCell {
                 let indexPath = tableView.indexPathForCell(selectedSearchResultCell)!
                 if let selectedRestaurant = restaurantDict![searchResults[indexPath.row].placeID]{
-                    restaurantEditController.restaurant = selectedRestaurant}
-                else{
-                    print("super fail")
+                    restaurantEditController.restaurant = selectedRestaurant
                 }
             }
         }
